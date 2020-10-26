@@ -1,72 +1,21 @@
-import os
-import re
 import boto3
 import botocore.exceptions
 import argparse
-
-
-# Define Functions
-def get_profiles() -> list:
-    # return list of aws profiles
-    aws_config = os.path.expanduser('~/.aws/config')
-    aws_profiles = ['default']
-    try:
-        with open(aws_config, 'r') as config:
-            for line in config:
-                if '[profile' in line:
-                    match = re.search(r"\[([A-Za-z0-9 _-]+)]", line)
-                    profile = match.group(1).split("profile ",)[1]
-                    aws_profiles.append(profile)
-                    # print(f"Adding {profile} to list of profiles to check")
-    except OSError as err:
-        print(f"Error: {err}")
-        print("Ensure AWS config is correct - try running 'aws configure'")
-        raise err
-    return aws_profiles
-
-
-def get_regions() -> list:
-    aws_regions = []
-    try:
-        ec2_client = boto3.client('ec2')
-        response = ec2_client.describe_regions()
-        # print(response['Regions'])
-        # print(type(response['Regions']))
-        for region in response['Regions']:
-            # print(region['RegionName'])
-            aws_regions.append(region['RegionName'])
-    except botocore.exceptions.ClientError as err:
-        print(f"Error when getting regions: {err.response['Error']['Message']}")
-    return aws_regions
-
-
-def get_public_ips(profile: str, region: str) -> list:
-    eips = []
-    try:
-        session = boto3.Session(profile_name=profile, region_name=region)
-        ec2_client = session.client('ec2')
-        response = ec2_client.describe_addresses()
-        for ip in response['Addresses']:
-            # print(ip['PublicIp'])
-            eips.append(ip['PublicIp'])
-    except botocore.exceptions.ClientError as err:
-        print(f"Error when processing request for profile {profile}: {err.response['Error']['Message']}")
-    return eips
-
+from core_functions import get_regions, get_profiles, get_public_ips
 
 # Get parameters
 parser = argparse.ArgumentParser(description='''
                                   Search AWS account(s) for EIPs \n
                                   By default it uses all configured profiles in 
-                                  aws credentials as per AWS CLI; or you can specify a specific profile''')
+                                  aws credentials as per AWS CLI; or you can specify specific profile(s)''')
 
 parser.add_argument('--aws-profile',
-                    help='Specify amazon profile to use.',
+                    help='Specify one or more amazon profiles separated by a space.',
                     default=None,
                     dest='profile',
                     nargs='*')
 parser.add_argument('--regions',
-                    help='Specify regions separated by space',
+                    help='Specify one or more regions separated by a space.',
                     default=None,
                     dest='requested_regions',
                     nargs='*')
@@ -105,4 +54,5 @@ for p in profiles:
                 print("\n")
     except botocore.exceptions.ClientError as err:
         print(f"Error when processing request for profile {p}: {err.response['Error']['Message']}")
-
+    except botocore.exceptions.ProfileNotFound as err:
+        print(f"Profile {p} not found")
